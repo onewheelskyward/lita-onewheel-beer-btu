@@ -32,7 +32,6 @@ describe Lita::Handlers::OnewheelBeerBtu, lita_handler: true do
 
   it 'displays details for tap 5' do
     send_command 'btu 5'
-    puts replies.last
     expect(replies.last).to include("BTU's tap 5) GHOSTMAN WHITE LAGER - 5.4% ABV 16 IBU - An unﬁltered wheat lager using oats to create a creamy head. Coriander and orange peel give this lager its ﬂoral aroma.")
   end
 end
