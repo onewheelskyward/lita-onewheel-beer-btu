@@ -43,7 +43,7 @@ module Lita
 
       def taps_list(response)
         beers = self.get_source
-        reply = 'btu taps: '
+        reply = 'BTU taps: '
         beers.each do |tap, datum|
           reply += "#{tap}) "
           reply += datum[:name] + ' '
@@ -58,7 +58,7 @@ module Lita
       end
 
       def send_response(tap, datum, response)
-        reply = "btu's tap #{tap}) "
+        reply = "BTU's tap #{tap}) "
         reply += "#{datum[:name]} - "
         reply += datum[:abv].to_s + '% ABV '
         reply += datum[:ibu].to_s + ' IBU '
@@ -76,69 +76,60 @@ module Lita
         #   response = RestClient.get('http://www.btupdx.com/ftp/TapList/BTUbeerlist.pdf')
         #   redis.setex('page_response', 18000, response)
         # end
-        io = method_name
-        reader = PDF::Reader.new(io)
-        # puts reader.info
-        puts reader.pages[0].text
-        # parse_response response
+        parse_response pull_pdf
       end
 
-      def method_name
-        open('http://www.btupdx.com/ftp/TapList/BTUbeerlist.pdf')
+      def pull_pdf
+        reader = PDF::Reader.new(open 'http://www.btupdx.com/ftp/TapList/BTUbeerlist.pdf')
+        reader.pages[0].text.split /\n/
       end
 
-      # This is the worker bee- decoding the html into our "standard" document.
+      # This is the worker bee- decoding the pdf into our "standard" document.
       def parse_response(response)
-        Lita.logger.debug 'parse_response started.'
         gimme_what_you_got = {}
-        got_beer = false
         tap = 1
         beer_name = nil
         beer_abv = nil
         beer_ibu = nil
-        beer_desc = nil
+        beer_desc = ''
 
-        noko = Nokogiri.HTML response
-        noko.css('.entry-content p').each do |beer_node|
-          # gimme_what_you_got
-          if got_beer
-            beer_desc = beer_node.children.to_s
+        response.each_with_index do |line, index|
+          line.strip!
+          if index >= 2
+            if line.empty?
+              unless beer_name.nil?
+                gimme_what_you_got[tap] = {
+                    brewery: 'BTU',
+                    name: beer_name.to_s,
+                    desc: beer_desc.to_s.strip,
+                    abv: beer_abv.to_f,
+                    ibu: beer_ibu,
+                    search: "#{beer_name} #{beer_desc}"
+                }
+                tap += 1
+                beer_name = nil
+                beer_desc = ''
+                beer_abv = nil
+                beer_ibu = nil
+              end
+              next
+            end
 
-            got_beer = false
-            full_text_search = "#{beer_name} #{beer_desc.to_s.gsub /\d+\.*\d*%*/, ''}"
+            if beer_name.nil?
+              beer_name = line
+              next
+            end
 
-            gimme_what_you_got[tap] = {
-                # type: tap_type,
-                # brewery: brewery.to_s,
-                name: beer_name.to_s,
-                desc: beer_desc.to_s,
-                abv: beer_abv.to_f,
-                ibu: beer_ibu.to_i,
-                # prices: prices,
-                # price: prices[1][:cost],
-                search: full_text_search
-            }
-            tap += 1
+            if (matchdata = line.match(/(.+)\sIBUS\s([0-9.]+)\%\s*ABV/))
+              beer_ibu = matchdata[1]
+              beer_abv = matchdata[2]
+              next
+            end
+
+            beer_desc += line + ' '
           end
-
-          if !got_beer and beer_node.to_s.match(/\d+ IBU/)
-            got_beer = true
-            # beer_name = nil
-            # beer_abv = nil
-            # beer_ibu = nil
-
-            data = beer_node.css('strong')
-            beer_name = data.children.first.to_s
-            beer_name.strip!
-            beer_name.sub! /\s*……….*ABV.*IBU/, ''
-            beer_name.sub! /………/, ''
-            beer_abv = data.children.last.to_s[/\d+\.\d+% ABV/]
-            beer_abv.sub! /% ABV/, ''
-            beer_ibu = data.children.last.to_s[/\d+ IBU/]
-            beer_ibu.sub! /\sIBU/, ''
-          end
-
         end
+
         gimme_what_you_got
       end
 
