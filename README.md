@@ -5,7 +5,7 @@
 
 Searches BTU Brasserie's Taproom draft list for data and displays it in IRC.
 
-http://www.baileystaproom.com/draft-list/
+http://www.btupdx.com/
 
 ## Installation
 
